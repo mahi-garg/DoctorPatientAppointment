@@ -3,6 +3,7 @@ package dao;
 import db.InMemoryDb;
 import models.*;
 
+import java.awt.print.Book;
 import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,11 +29,10 @@ public class Daoimpl implements Dao {
             db.getSpecializationDB().put(doctor.getSpecialization(), list);
         }
     }
-
     @Override
-    public void addAvailableSlots(String name, List<AvailableSlot> validAvailableSlotsList) {
+    public void addAvailableSlot(String name, AvailableSlot validAvailableSlot) {
 
-        db.getDoctorDB().get(name).getAvailableSlots().addAll(validAvailableSlotsList);
+        db.getDoctorDB().get(name).getAvailableSlots().add(validAvailableSlot);
     }
 
     @Override
@@ -51,8 +51,6 @@ public class Daoimpl implements Dao {
     @Override
     public Integer bookAppointment(String patientName, String doctorName, Time startTime) {
 
-        if (db.getDoctorDB().keySet().contains(doctorName) && db.getPatientDB().keySet().contains(patientName) && isDoctorAvailable(doctorName, startTime)) {
-
             BookedSlot SlotToBeBooked = new BookedSlot(id, startTime, patientName, doctorName);
             db.getBookings().put(SlotToBeBooked.getBookingId(), SlotToBeBooked);
             id++;
@@ -62,13 +60,20 @@ public class Daoimpl implements Dao {
             db.getDoctorDB().get(doctorName).getBookedSlots().add(SlotToBeBooked);
             db.getPatientDB().get(patientName).getBookedAppointments().add(SlotToBeBooked);
             return SlotToBeBooked.getBookingId();
-        }
 
-        db.getWaitListDb().put(waitingId, new WaitingList(waitingId, startTime, patientName, doctorName ));
-        waitingId++;
-        return 0;
     }
 
+    @Override
+    public int addToWaitingList(Time startTime, String patientName, String doctorName){
+        db.getWaitListDb().put(waitingId, new WaitingList(waitingId, startTime, patientName, doctorName ));
+        waitingId++;
+        return waitingId-1;
+    }
+
+    @Override
+    public Boolean checkBookingId(int bookingId){
+        return db.getBookings().keySet().contains(bookingId);
+    }
     @Override
     public void cancelBooking(int bookingId) {
 
@@ -80,7 +85,7 @@ public class Daoimpl implements Dao {
         db.getDoctorDB().get(doctorName).getBookedSlots().remove(bookedSlot);
         db.getDoctorDB().get(doctorName).getAvailableSlots().add(new AvailableSlot(bookedSlot.getStartTime(), new Time(bookedSlot.getStartTime().getTime()+ 60*60*1000)));
 
-        clearWaitingList(patientName, doctorName,  bookedSlot.getStartTime());
+        clearWaitingList(doctorName,  bookedSlot.getStartTime());
     }
 
     @Override
@@ -112,15 +117,31 @@ public class Daoimpl implements Dao {
         return false;
     }
 
-    private void clearWaitingList(String patientName, String doctorName, Time startTime){
+    @Override
+    public Boolean isPatientAvailable(String patientName, Time startTime){
+
+        List<BookedSlot> appointments =  db.getPatientDB().get(patientName).getBookedAppointments();
+
+        for(BookedSlot slot: appointments){
+
+            if(slot.getStartTime().equals(startTime)){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private void clearWaitingList(String doctorName, Time startTime){
 
         Collection<WaitingList> waitingList = db.getWaitListDb().values();
-
+        String patientName = null;
         int waitingIdToBeRemoved = 0;
         for (WaitingList waiting: waitingList){
 
-            if(waiting.getDoctor().equals(doctorName) && waiting.getPatient().equals(patientName) && waiting.getStartTime().equals(startTime)){
-                System.out.println( waiting.getWaitingId());
+
+            if(waiting.getDoctor().equals(doctorName) && waiting.getStartTime().equals(startTime)){
+
+                patientName = waiting.getPatient();
                 waitingIdToBeRemoved = waiting.getWaitingId();
             }
         }
@@ -128,8 +149,18 @@ public class Daoimpl implements Dao {
         if(waitingIdToBeRemoved!=0) {
             db.getWaitListDb().remove(waitingIdToBeRemoved);
             if(bookAppointment(patientName, doctorName, startTime)!=0){
-                System.out.println("waiting list with waitingId " +  waitingIdToBeRemoved + "got confirmed for " + patientName + " - " + doctorName + " - at time " + startTime);
+                System.out.println("waiting list with waitingId " +  waitingIdToBeRemoved + " got confirmed for " + patientName + " - " + doctorName + " - at time " + startTime);
             }
         }
+    }
+    @Override
+
+    public Boolean doctorAlreadyRegistered(String name){
+        return db.getDoctorDB().keySet().contains(name);
+    }
+
+    @Override
+    public Boolean patientAlreadyRegistered(String name){
+        return db.getPatientDB().keySet().contains(name);
     }
 }

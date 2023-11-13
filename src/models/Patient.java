@@ -29,5 +29,4 @@ public class Patient {
         this.bookedAppointments = bookedAppointments;
     }
 
-
 }
